@@ -25,12 +25,12 @@ If you want to run from sources:
     - `pip install tuyapower`
     - `pip install requests`
     - `pip install PyQt5`
-4. Run `python .\control.py`
+4. Run `python .\MainWindow.py`
 
 To build a self contained executable use [pyinstaller](https://www.pyinstaller.org/):
 
 - `pip install pyinstaller`
-- `pyinstaller --name="SmartHome" --windowed --onefile .\control.py`
+- `pyinstaller --name="SmartHome" --windowed --onefile .\MainWindow.py`
 
 ## Credits
 

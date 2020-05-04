@@ -1,40 +1,12 @@
+import sys
 import tuyapower
 import tuyaha.tuyaapi
+from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-from PyQt5.QtCore import *
+from DeviceScanner import DeviceScanner
+from SmartSocket import SmartSocket
 
-class SmartSocket(object):
-    def __init__(self, id, name, online, state):
-        super().__init__()
-        self.id = id
-        self.name = name
-        self.online = online
-        self.state = state
-        self.ip = None
-        self.key = None
-        self.version = None
-        self.W = None
-        self.mA = None
-        self.V = None
-
-    def __str__(self):
-        return f"Device at {self.ip}: ID {self.id}, state={self.state}, W={self.W}, mA={self.mA}, V={self.V}"
-
-class ScanDeviceThread(QThread):
-    _signal = pyqtSignal(object)
-
-    def __init__(self, callback, parent=None):
-        super().__init__(parent=parent)
-        self._signal.connect(callback)
-
-    def run(self):
-        devices = tuyapower.deviceScan(True)
-        for ip in devices:
-            id = devices[ip]['gwId']
-            self._signal.emit(
-                (id, ip, devices[ip]['productKey'],  devices[ip]['version']))
-        self._signal.emit(None)
 
 class MainWindow(object):
     def __init__(self):
@@ -52,9 +24,9 @@ class MainWindow(object):
         self._passwordWidget.setEchoMode(QLineEdit.Password)
         self._countryCode = QLineEdit('39')
 
-        scanButton = QPushButton('Connect')
-        scanButton.clicked.connect(self._connect)
-        scanButton.setFixedSize(120, 30)
+        self._connectButton = QPushButton('Connect')
+        self._connectButton.clicked.connect(self._connect)
+        self._connectButton.setFixedSize(120, 30)
 
         grid = QGridLayout()
         grid.addWidget(QLabel('Username'), 0, 0)
@@ -66,7 +38,7 @@ class MainWindow(object):
         grid.addWidget(QLabel('CountryCode'), 0, 4)
         grid.addWidget(self._countryCode, 0, 5)
 
-        grid.addWidget(scanButton, 1, 0, 1, 6, alignment=Qt.AlignCenter)
+        grid.addWidget(self._connectButton, 1, 0, 1, 6, alignment=Qt.AlignCenter)
 
         self._deviceList = QListView()
         self._deviceListModel = QStandardItemModel(self._deviceList)
@@ -98,16 +70,13 @@ class MainWindow(object):
         self._window.setLayout(grid)
 
     def _initUpdate(self):
+        self._scanDeviceThread = DeviceScanner(self._handleScanDeviceResult)
+        self._scanDeviceThread.start()
         self._timer = QTimer()
         self._timer.timeout.connect(self._updatePowerInfo)
         self._timer.start(1000)
 
     def _updatePowerInfo(self):
-        if self._scanDeviceThread is None:
-            self._scanDeviceThread = ScanDeviceThread(self._handleScanDeviceResult)
-            self._scanDeviceThread.start()
-            return
-        
         if self._selectedSmartSocket is None:
             return
 
@@ -137,7 +106,11 @@ class MainWindow(object):
 
     def _handleScanDeviceResult(self, result):
         if result is None:
+            self._scanDeviceThread = None
+            self._connectButton.setText('Connect')
+            self._connectButton.setEnabled(True)
             return
+
         (id, ip, key, version) = result
         for index in range(self._deviceListModel.rowCount()):
             smartSocket = self._deviceListModel.item(index).data()
@@ -148,34 +121,43 @@ class MainWindow(object):
                 break
 
     def _connect(self):
-        username = self._userNameWidget.text()
-        password = self._passwordWidget.text()
-        countryCode = self._countryCode.text()
+        try:
+            username = self._userNameWidget.text()
+            password = self._passwordWidget.text()
+            countryCode = self._countryCode.text()
 
-        if len(username) == 0 or len(password) == 0 or len(countryCode) == 0:
+            if len(username) == 0 or len(password) == 0 or len(countryCode) == 0:
+                msg = QMessageBox()
+                msg.setIcon(QMessageBox.Warning)
+                msg.setText("Please insert login data")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.exec_()
+                return
+
+            self._api.init(username, password, countryCode, 'smart_life')
+
+            devices = self._api.discover_devices()
+
+            self._deviceListModel.clear()
+
+            for device in devices:
+                smartSocket = SmartSocket(
+                    device['id'], device['name'], device['data']['online'], device['data']['state'])
+                item = QStandardItem(
+                    f'[{"Online" if smartSocket.online else "Offline":7}] {smartSocket.name}')
+                item.setFont(QFont('Consolas'))
+                item.setData(smartSocket)
+                self._deviceListModel.appendRow(item)
+            
+            self._connectButton.setText('Scanning...')
+            self._connectButton.setEnabled(False)
+            self._initUpdate()
+        except Exception as e:
             msg = QMessageBox()
-            msg.setIcon(QMessageBox.Warning)
-            msg.setText("Please insert login data")
+            msg.setIcon(QMessageBox.Critical)
+            msg.setText("An error occurred: " + e.args[0])
             msg.setStandardButtons(QMessageBox.Ok)
             msg.exec_()
-            return
-
-        self._api.init(username, password, countryCode, 'smart_life')
-
-        devices = self._api.discover_devices()
-
-        self._deviceListModel.clear()
-
-        for device in devices:
-            smartSocket = SmartSocket(
-                device['id'], device['name'], device['data']['online'], device['data']['state'])
-            item = QStandardItem(
-                f'[{"Online" if smartSocket.online else "Offline":7}] {smartSocket.name}')
-            item.setFont(QFont('Consolas'))
-            item.setData(smartSocket)
-            self._deviceListModel.appendRow(item)
-        
-        self._initUpdate()
 
     def _onItemClicked(self, index):
         item = self._deviceListModel.itemFromIndex(index)
