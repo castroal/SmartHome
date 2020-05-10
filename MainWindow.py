@@ -48,6 +48,7 @@ class MainWindow(object):
         grid.addWidget(self._deviceList, 2, 0, 2, 5)
 
         self._NameLabel = QLabel('')
+        self._IpLabel = QLabel('')
         self._StateLabel = QLabel('')
         self._WattLabel = QLabel('')
         self._AmpereLabel = QLabel('')
@@ -58,6 +59,7 @@ class MainWindow(object):
 
         statBox = QVBoxLayout()
         statBox.addWidget(self._NameLabel)
+        statBox.addWidget(self._IpLabel)
         statBox.addWidget(self._StateLabel)
         statBox.addWidget(self._WattLabel)
         statBox.addWidget(self._AmpereLabel)
@@ -84,6 +86,7 @@ class MainWindow(object):
         self._StateLabel.setText(f'State: {"on" if self._selectedSmartSocket.state else "off"}')
 
         if self._selectedSmartSocket.key is None:
+            self._IpLabel.setText('IP: searching...')
             self._WattLabel.setText('Watts: updating...')
             self._AmpereLabel.setText('mA: updating...')
             self._VoltLabel.setText('Volts: updating...')
@@ -100,6 +103,7 @@ class MainWindow(object):
         self._selectedSmartSocket.mA = mA
         self._selectedSmartSocket.V = V
 
+        self._IpLabel.setText(f'IP: {self._selectedSmartSocket.ip}')
         self._WattLabel.setText(f'Watts: {self._selectedSmartSocket.W}')
         self._AmpereLabel.setText(f'mA: {self._selectedSmartSocket.mA}')
         self._VoltLabel.setText(f'Volts: {self._selectedSmartSocket.V}')
